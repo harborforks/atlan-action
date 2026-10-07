@@ -19,6 +19,9 @@ inputs:
     description: "Ignore model alias matching"
     required: false
     default: "false"
+  DBT_CONNECTION_QUALIFIED_NAME:
+    description: "Look models up only in this dbt connection, for example default/dbt/1706648562"
+    required: false
   ATLAN_CONFIG:
     description: "Atlan CLI config file location"
     required: false

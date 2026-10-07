@@ -19,6 +19,10 @@ export const IGNORE_MODEL_ALIAS_MATCHING =
 export const ATLAN_CONFIG =
   process.env.ATLAN_CONFIG || core.getInput("ATLAN_CONFIG");
 
+export const DBT_CONNECTION_QUALIFIED_NAME =
+  process.env.DBT_CONNECTION_QUALIFIED_NAME ||
+  core.getInput("DBT_CONNECTION_QUALIFIED_NAME");
+
 //GITLAB SPECIFIC ENV VARIABLES
 export async function getCIMergeRequestIID(
   gitlab,
