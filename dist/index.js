@@ -48668,6 +48668,10 @@ const IGNORE_MODEL_ALIAS_MATCHING =
 const ATLAN_CONFIG =
   process.env.ATLAN_CONFIG || getInput("ATLAN_CONFIG");
 
+const DBT_CONNECTION_QUALIFIED_NAME =
+  process.env.DBT_CONNECTION_QUALIFIED_NAME ||
+  getInput("DBT_CONNECTION_QUALIFIED_NAME");
+
 //GITLAB SPECIFIC ENV VARIABLES
 async function getCIMergeRequestIID(
   gitlab,
@@ -56910,6 +56914,15 @@ async function getAsset({
                   },
                 ]
               : []),
+            ...(DBT_CONNECTION_QUALIFIED_NAME
+              ? [
+                  {
+                    term: {
+                      connectionQualifiedName: DBT_CONNECTION_QUALIFIED_NAME,
+                    },
+                  },
+                ]
+              : []),
           ],
         },
       },
@@ -61323,7 +61336,9 @@ class GitHubIntegration extends IntegrationInterface {
         const timeStart = Date.now();
 
         const totalModifiedFiles = changedFiles.filter(
-          (i) => i.status === "modified"
+          // Deleted and renamed models are looked up too. Counting only
+          // modified ones divides by zero on a PR that only deletes models.
+          (i) => i.status !== "added"
         ).length;
 
         const downstreamAssets = await getDownstreamAssets(
@@ -61507,7 +61522,9 @@ class GitHubIntegration extends IntegrationInterface {
         const timeStart = Date.now();
 
         const totalModifiedFiles = changedFiles.filter(
-          (i) => i.status === "modified"
+          // Deleted and renamed models are looked up too. Counting only
+          // modified ones divides by zero on a PR that only deletes models.
+          (i) => i.status !== "added"
         ).length;
 
         const downstreamAssets = await getDownstreamAssets(
@@ -61746,19 +61763,24 @@ class GitHubIntegration extends IntegrationInterface {
         repo = repository.name,
         pull_number = pull_request.number;
 
-      const res = await octokit.request(
-        `GET /repos/${owner}/${repo}/pulls/${pull_number}/files`,
+      // One page holds only the first 30 files.
+      const files = await octokit.paginate(
+        "GET /repos/{owner}/{repo}/pulls/{pull_number}/files",
         {
           owner,
           repo,
           pull_number,
+          per_page: 100,
         }
       );
 
-      var changedFiles = res.data
-        .map(({ filename, status }) => {
+      var changedFiles = files
+        .map(({ filename, previous_filename, status }) => {
           try {
-            const [modelName] = filename
+            // Atlan knows a renamed model by its old name.
+            const [modelName] = (
+              status === "renamed" ? previous_filename : filename
+            )
               .match(/.*models\/(.*)\.sql/)[1]
               .split("/")
               .reverse()[0]
@@ -61932,12 +61954,14 @@ class GitHubIntegration extends IntegrationInterface {
     const { pull_request } = context.payload;
 
     try {
-      const comments = await octokit.rest.issues.listComments({
+      // One page holds only the first 30 comments.
+      const comments = await octokit.paginate(octokit.rest.issues.listComments, {
         ...context.repo,
         issue_number: pull_request.number,
+        per_page: 100,
       });
 
-      const existingComment = comments.data.find(
+      const existingComment = comments.find(
         (comment) =>
           comment.user.login === "github-actions[bot]" &&
           comment.body.includes(
@@ -62054,11 +62078,15 @@ ${content}`;
           meanings,
           classificationNames,
         }) => {
-          // Modifying the typeName and getting the readableTypeName
-          let readableTypeName = typeName
-            .toLowerCase()
-            .replace(attributes?.connectorName, "")
-            .toUpperCase();
+          // Strip the connector only when it prefixes the type, as in
+          // LookerDashboard; Application in an app connection stays whole.
+          const connector = attributes?.connectorName || "";
+          let readableTypeName =
+            connector &&
+            typeName.toLowerCase().startsWith(connector) &&
+            /[A-Z]/.test(typeName.charAt(connector.length))
+              ? typeName.slice(connector.length)
+              : typeName;
 
           // Filtering classifications based on classificationNames
           let classificationsObj = classifications.filter(({ name }) =>

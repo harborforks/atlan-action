@@ -7,6 +7,7 @@ import {
 import {
   ATLAN_INSTANCE_URL,
   ATLAN_API_TOKEN,
+  DBT_CONNECTION_QUALIFIED_NAME,
 } from "../utils/get-environment-variables.js";
 
 export default async function getAsset({
@@ -47,6 +48,15 @@ export default async function getAsset({
                   {
                     term: {
                       "assetDbtEnvironmentName.keyword": environment,
+                    },
+                  },
+                ]
+              : []),
+            ...(DBT_CONNECTION_QUALIFIED_NAME
+              ? [
+                  {
+                    term: {
+                      connectionQualifiedName: DBT_CONNECTION_QUALIFIED_NAME,
                     },
                   },
                 ]
